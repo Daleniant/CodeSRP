@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "db_manager.h"
+#include "sp_cache.h"
 
 // Starts the sequence of displaying individual snippet
 // Includes options to edit, delete, or return to collection
@@ -22,4 +23,4 @@ void display_collection (Snippet_Collection *collection, Database *db);
 void create_snippet (Database *db, std::vector<std::string> &categories);
 
 // Starts the sequence of searching for a snippet
-Snippet_Collection *search_snippet (Database *db);
+void search_snippet (Database *db, Sp_Cache *cache);

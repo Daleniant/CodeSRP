@@ -38,6 +38,10 @@ private:
     std::string created_at;
     std::string category_name;
 public:
+    // Represents whether snippet was modified during its lifetime
+    // Used in cache write-back policy
+    bool modified = false;
+
     Snippet (int snippet_id, const std::string& name, 
         const std::string& description, const std::string& code, 
         const std::string& created_at, std::string category_name);
@@ -53,6 +57,12 @@ public:
     std::string get_created_at ();
 
     std::string get_category_name ();
+
+    void update_name (std::string new_name);
+
+    void update_description (std::string new_description);
+
+    void update_category (std::string new_category);
 
     void update_code (std::string new_code);
 };
@@ -71,7 +81,7 @@ public:
     void add_snippet(const Snippet& snippet);    
 
     // Get a copy of particular snippet
-    Snippet get_snippet (int index);
+    Snippet *get_snippet (int index);
 
     // Update a snippet in the collection at a particular index
     void update_snippet (int index, const Snippet snippet);

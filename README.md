@@ -11,6 +11,7 @@ CodeSRP uses PostgreSQL, thus you need to download it.
 3. Create user. https://www.postgresql.org/docs/current/sql-createuser.html
 4. Create database. `createdb Snippets'
 5. Set up database tables according to this schema (open db with `psql Snippets`).
+6. Additional reqs: xclip
 ```
 CREATE TABLE Categories (
     category_id SERIAL PRIMARY KEY,

@@ -4,18 +4,18 @@ using namespace std;
 
 // Set up the connection credenials (replace with your actual database credentials)
 #define DB_NAME "Snippets"
-#define USER_NAME "daleniant"
-#define DB_PASSWORD "gPu3sdzJKer"
+#define USER_NAME "USERNAME"
+#define DB_PASSWORD "PASSWORD"
 
 
-void display_snippet (Snippet *snippet, Database *db) {
+void display_snippet (Snippet *snippet, Database *db, Sp_Cache *cache) {
     string input;
     while (true) {
-        cout << "Snippet: " << snippet->get_name() << endl;
+        cout << "\nSnippet: " << snippet->get_name() << endl;
         cout << "Description: " << snippet->get_description() << endl;
         cout << "Created at: " << snippet->get_created_at() << endl;
         cout << "Category: " << snippet->get_category_name() << endl;
-        cout << "Code: \n" << endl << snippet->get_code() << "\n" << endl;
+        cout << "Code: \n" << endl << snippet->get_code() << endl;
         cout << "Enter a command(\\q exit, \\u update snippet, \\d delete): ";
         getline(cin, input);
 
@@ -36,17 +36,26 @@ void display_snippet (Snippet *snippet, Database *db) {
             cout << "Enter the new code for the snippet: (empty to not change)\n";
             getline(cin, code);
 
-            name = name == "" ? snippet->get_name() : name;
-            description = description == "" ? snippet->get_description() : description;
-            category = category == "" ? snippet->get_category_name() : category;
-            code = code == "" ? snippet->get_code() : code;
+            // Check just in case if user didn't input anything
+            if (name != "" || description != "" || category != "" || code != "") {
+                name = name == "" ? snippet->get_name() : name;
+                description = description == "" ? snippet->get_description() : description;
+                code = code == "" ? snippet->get_code() : code;
+                category = category == "" ? snippet->get_category_name() : category;
 
-            string query = "UPDATE snippets SET name = '" + name + 
-                "', description = '" + description + "', code = '" + code + 
-                "', category_id = (SELECT category_id FROM categories WHERE category_name = '" + 
-                category + "') WHERE snippet_id = " + to_string(snippet->get_snippet_id()) + ";";
-
-            db->query (query);
+                // Categories have write-though policy, so treat differently if its a new category
+                // Check whether inputted category exists, if not - add it
+                // If category was left unchanged - its guaranteed to be cached
+                if (!cache->is_category(category)) {
+                    cache->change_category(category, 'a');
+                }
+            
+                snippet->modified = true;
+                snippet->update_name (name);
+                snippet->update_description (description);
+                snippet->update_code (code);
+                snippet->update_category (category);
+            }
         } else if (input == "\\d") {
             cout << "Are you sure you want to delete this snippet? [Y/N]: ";
             getline(cin, input);
@@ -60,9 +69,9 @@ void display_snippet (Snippet *snippet, Database *db) {
 }
 
 
-void display_collection (Snippet_Collection *collection, Database *db) {
+void display_collection (Snippet_Collection *collection, Database *db, Sp_Cache *cache) {
     int n = collection->size();
-    cout << "There are " << n << " snippets." << endl;
+    cout << "\nThere are " << n << " snippets." << endl;
 
     int start = 0, end = start + MAX_DISPLAY; string input;
     while (start < n) {
@@ -94,12 +103,12 @@ void display_collection (Snippet_Collection *collection, Database *db) {
                 int index = stoi(input); index--;
                 if (index >= 0 && index < collection->size()) {
                     // Snippet was cached without code for optimization - now is the time update it
-                    Snippet snippet = collection->get_snippet(index);
+                    Snippet *snippet = collection->get_snippet(index);
                     string query = "SELECT code FROM snippets WHERE snippet_id = " + 
-                        to_string(snippet.get_snippet_id()) + ";";
+                        to_string(snippet->get_snippet_id()) + ";";
                     pqxx::result result = db->query (query);
-                    snippet.update_code (result[0]["code"].as<string>());
-                    display_snippet (&snippet, db);
+                    snippet->update_code (result[0]["code"].as<string>());
+                    display_snippet (snippet, db, cache);
                 }
                 else {
                     cout << "Invalid input, please try again." << endl;
@@ -133,7 +142,7 @@ void create_snippet (Database *db, vector<string> &categories) {
         getline(cin, line);
     }
 
-    cout << "Enter a description for the snippet (press enter to leave empty):";
+    cout << "Enter a description for the snippet (press enter to leave empty): ";
     getline(cin, description);
 
     cout << "Enter the category for the snippet (\\c for available categories): ";
@@ -172,40 +181,18 @@ void create_snippet (Database *db, vector<string> &categories) {
 }
 
 
-Snippet_Collection *search_snippet (Database *db) {
+void search_snippet (Database *db, Sp_Cache *cache) {
     string name;
     cout << "Enter a snippet name:\n > ";  
     getline(cin, name);
 
-    Snippet_Collection *collection = new Snippet_Collection ();
-    // Retrieve all snippets that contain keyword in their name (case independent)
-    pqxx::result result = db->query (
-        "SELECT snippet_id, name, description, created_at, category_id FROM \
-        snippets WHERE name ILIKE '%" + name + "%';");
-    // Put retrieved snippets to a collection and display to user
-    for (const auto& row : result) {
-        int snippet_id = row["snippet_id"].as<int>();
-        string name = row["name"].as<string>();
-        string description = row["description"].as<string>();
-        string created_at = row["created_at"].as<string>();
-        
-        result = db->query ("SELECT category_name FROM categories WHERE category_id = " + 
-            to_string(row["category_id"].as<int>()) + ";");
-        string category_name = result[0]["category_name"].as<string>();
+    Snippet_Collection *collection = cache->get_collection (name);
 
-        // For space optimization purposes do not retrieve code unless user requests
-        Snippet snippet(snippet_id, name, description, "", created_at, category_name);
-        collection->add_snippet (snippet);
-    }
-
-    collection->sort_by_key (name);
-    display_collection (collection, db);
-
-    return collection;
+    display_collection (collection, db, cache);
 }
 
 // Runs an inifinite loop to get user input and run the appropriate function
-void run_codesrp (Database *db) {
+void run_codesrp (Database *db, Sp_Cache *cache) {
     vector<string> categories = db->get_categories();
     unordered_map<string, Snippet_Collection *> collections;
 
@@ -224,7 +211,7 @@ void run_codesrp (Database *db) {
         } else if (input == "\\a") {
             create_snippet (db, categories);
         } else if (input == "\\s") {
-            search_snippet (db);
+            search_snippet (db, cache);
         } else if (input == "\\q") {
             cout << "Have a good day!" << endl;
             break;
@@ -235,9 +222,10 @@ void run_codesrp (Database *db) {
 
 int main () {
     Database *db = new Database (DB_NAME, USER_NAME, DB_PASSWORD);
-
-    run_codesrp (db);
+    Sp_Cache *cache = new Sp_Cache (db);
+    run_codesrp (db, cache);
 
     delete db;
+    delete cache;
     return 0;
 }

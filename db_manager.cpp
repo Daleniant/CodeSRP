@@ -47,6 +47,8 @@ vector<string> Database::get_categories () {
     for (const auto& row : result) {
         categories.push_back(row["category_name"].as<string>());
     }
+    // Sort categories alphabetically
+    sort (categories.begin(), categories.end());
 
     return categories;
 }
@@ -91,8 +93,20 @@ string Snippet::get_category_name () {
     return category_name;
 }
 
+void Snippet::update_name (string new_name) {
+    name = new_name;
+}
+
+void Snippet::update_description (string new_description) {
+    description = new_description;
+}
+
 void Snippet::update_code (string new_code) {
     code = new_code;
+}
+
+void Snippet::update_category (string new_category) {
+    category_name = new_category;
 }
 
 
@@ -108,8 +122,8 @@ void Snippet_Collection::add_snippet (const Snippet& snippet) {
     snippets.push_back(snippet);
 }
 
-Snippet Snippet_Collection::get_snippet (int index) {
-    return snippets[index];
+Snippet *Snippet_Collection::get_snippet (int index) {
+    return &snippets[index];
 }
 
 void Snippet_Collection::update_snippet (int index, const Snippet snippet) {
@@ -129,7 +143,7 @@ void Snippet_Collection::display_snippets (int start/*=0*/, int count/*=MAX_DISP
 
     int end = start + count;
     end = end > size ? size : end;
-
+    cout << endl;
     for (int i = start; i < end; i++) {
         cout << i+1 << ". " << snippets[i].get_name() << endl;
         if (snippets[i].get_description() != "") {
@@ -138,6 +152,7 @@ void Snippet_Collection::display_snippets (int start/*=0*/, int count/*=MAX_DISP
             cout << "*********************" << endl;
         }
     }
+    cout << endl;
 }
 
 void Snippet_Collection::sort_by_key (string key) {
